@@ -1,0 +1,137 @@
+// Original Draft Society (ODS) — data model
+//
+// A Player is assigned to exactly one Order for life (deterministically
+// derived from their email — see src/lib/orderAssignment.ts). Everything
+// else (progress, achievements, event participation) hangs off that
+// player/order relationship.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One of the six ODS Orders. Seeded once; slugs are stable identifiers
+/// used throughout the API and must never be renamed.
+model Order {
+  slug   String @id
+  name   String @unique
+  animal String
+
+  players  Player[]
+  progress OrderProgress[]
+
+  createdAt DateTime @default(now())
+
+  @@map("orders")
+}
+
+/// A BLPA participant. `id` is the base64url encoding of their normalized
+/// email — see src/lib/playerId.ts. This makes the id derivable from the
+/// email alone (it is NOT a secret / not encryption), which is what makes
+/// it usable as a stable correlation key across independent LeagueApps
+/// syncs without a lookup round-trip.
+model Player {
+  id             String  @id
+  email          String  @unique
+  displayName    String?
+  leagueAppsUserId String? @unique
+
+  orderSlug String
+  order     Order  @relation(fields: [orderSlug], references: [slug])
+
+  progress      OrderProgress?
+  achievements  Achievement[]
+  participation EventParticipation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderSlug])
+  @@map("players")
+}
+
+/// A player's running standing within their Order: points, degree
+/// (rank/tier within the Order), last updated. One row per player.
+model OrderProgress {
+  playerId String @id
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  orderSlug String
+  order     Order  @relation(fields: [orderSlug], references: [slug])
+
+  points Int @default(0)
+  degree Int @default(1)
+
+  updatedAt DateTime @updatedAt
+
+  @@index([orderSlug])
+  @@map("order_progress")
+}
+
+/// A named accomplishment awarded to a player, optionally tied to the
+/// event where it was earned. `code` is a stable machine key (e.g.
+/// "first_blood", "season_champion"); duplicates per player are rejected
+/// at the DB level so awarding logic can be a plain upsert/skip.
+model Achievement {
+  id String @id @default(cuid())
+
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  code  String
+  title String
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id])
+
+  awardedAt DateTime @default(now())
+
+  @@unique([playerId, code])
+  @@index([eventId])
+  @@map("achievements")
+}
+
+/// A BLPA event, optionally mirrored from a LeagueApps event.
+model Event {
+  id               String    @id @default(cuid())
+  leagueAppsEventId String?  @unique
+  name             String
+  startDate        DateTime?
+  endDate          DateTime?
+
+  participation EventParticipation[]
+  achievements  Achievement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("events")
+}
+
+/// A single player's participation record in a single event. Order totals
+/// for an event are derived by summing pointsEarned across participation
+/// rows grouped by the player's order — see src/services/orderTotals.ts —
+/// rather than maintained as a separate redundant table, so they can never
+/// drift out of sync with the underlying records.
+model EventParticipation {
+  id String @id @default(cuid())
+
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  pointsEarned Int      @default(0)
+  placement    Int?
+  registeredAt DateTime @default(now())
+  metadata     Json?
+
+  @@unique([playerId, eventId])
+  @@index([eventId])
+  @@map("event_participation")
+}

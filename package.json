@@ -1,0 +1,41 @@
+{
+  "name": "blpa-ods",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Original Draft Society (ODS) classification API and database for BLPA players",
+  "main": "dist/index.js",
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^7.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.15",
+    "prisma": "^5.19.1",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
