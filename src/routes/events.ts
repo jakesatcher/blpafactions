@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { requireAdmin } from "../middleware/adminAuth";
 import { getOrderTotalsForEvent } from "../services/orderTotals";
 
 export const eventsRouter = Router();
@@ -12,7 +13,11 @@ const createEventSchema = z.object({
   endDate: z.string().datetime().optional(),
 });
 
-eventsRouter.post("/events", async (req, res) => {
+// Listing events and their aggregate per-Order totals is public (no PII,
+// fits a fan-facing leaderboard); creating events, viewing a single
+// event's participation roster (player ids), and recording participation
+// are admin-only.
+eventsRouter.post("/events", requireAdmin, async (req, res) => {
   const parsed = createEventSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
@@ -33,7 +38,7 @@ eventsRouter.get("/events", async (_req, res) => {
   res.json(await prisma.event.findMany({ orderBy: { createdAt: "desc" } }));
 });
 
-eventsRouter.get("/events/:eventId", async (req, res) => {
+eventsRouter.get("/events/:eventId", requireAdmin, async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { id: req.params.eventId },
     include: { participation: true },
@@ -52,7 +57,7 @@ const participationSchema = z.object({
   placement: z.number().int().optional(),
 });
 
-eventsRouter.post("/events/:eventId/participation", async (req, res) => {
+eventsRouter.post("/events/:eventId/participation", requireAdmin, async (req, res) => {
   const parsed = participationSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });

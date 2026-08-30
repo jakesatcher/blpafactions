@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ODS Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Original Draft Society</h1>
+      <p class="subtitle">BLPA player &amp; Order administration console</p>
+    </div>
+    <div class="token-box">
+      <label for="admin-token">Admin token</label>
+      <input id="admin-token" type="password" placeholder="x-admin-token" autocomplete="off" />
+      <button id="save-token" type="button">Save</button>
+      <span id="token-status" class="status-dot" title="token not saved"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="standings-card">
+      <div class="card-header">
+        <h2>Order Standings</h2>
+        <button type="button" data-refresh="standings">Refresh</button>
+      </div>
+      <table class="standings-table">
+        <thead>
+          <tr><th>Order</th><th>Animal</th><th>Players</th><th>Total Points</th></tr>
+        </thead>
+        <tbody id="standings-body"></tbody>
+      </table>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-header"><h2>Find / Create Player</h2></div>
+        <form id="player-lookup-form" class="stacked-form">
+          <label>Email
+            <input type="email" name="email" required placeholder="player@example.com" />
+          </label>
+          <label>Display name <span class="optional">(only used on create)</span>
+            <input type="text" name="displayName" placeholder="Jane Doe" />
+          </label>
+          <div class="button-row">
+            <button type="submit" data-action="find">Find</button>
+            <button type="submit" data-action="create">Create / Update</button>
+          </div>
+        </form>
+
+        <div id="player-card" class="player-card" hidden>
+          <h3 id="player-name"></h3>
+          <dl>
+            <dt>Player ID</dt><dd id="player-id"></dd>
+            <dt>Email</dt><dd id="player-email"></dd>
+            <dt>Order</dt><dd id="player-order"></dd>
+            <dt>Points</dt><dd id="player-points"></dd>
+            <dt>Degree</dt><dd id="player-degree"></dd>
+          </dl>
+          <h4>Achievements</h4>
+          <ul id="player-achievements" class="achievement-list"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Award Points / Achievements</h2></div>
+        <p class="hint">Look up or create a player first — these act on the player currently shown on the left.</p>
+
+        <form id="points-form" class="stacked-form">
+          <label>Points to add <span class="optional">(negative to subtract)</span>
+            <input type="number" name="points" required step="1" />
+          </label>
+          <button type="submit">Add Points</button>
+        </form>
+
+        <form id="achievement-form" class="stacked-form">
+          <label>Achievement code
+            <input type="text" name="code" required placeholder="first_event" />
+          </label>
+          <label>Achievement title
+            <input type="text" name="title" required placeholder="Played First Event" />
+          </label>
+          <label>Event ID <span class="optional">(optional)</span>
+            <input type="text" name="eventId" placeholder="cly..." />
+          </label>
+          <button type="submit">Award Achievement</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-header"><h2>Events</h2></div>
+        <form id="event-form" class="stacked-form">
+          <label>Name
+            <input type="text" name="name" required placeholder="BLPA Summer Slam" />
+          </label>
+          <label>LeagueApps Event ID <span class="optional">(optional)</span>
+            <input type="text" name="leagueAppsEventId" />
+          </label>
+          <button type="submit">Create Event</button>
+        </form>
+        <ul id="event-list" class="event-list"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Record Participation</h2>
+        </div>
+        <p class="hint">Selected event: <strong id="selected-event-name">none — click an event on the left</strong></p>
+        <form id="participation-form" class="stacked-form">
+          <label>Player ID
+            <input type="text" name="playerId" required placeholder="from the player card above" />
+          </label>
+          <label>Points earned
+            <input type="number" name="pointsEarned" value="0" step="1" required />
+          </label>
+          <label>Placement <span class="optional">(optional)</span>
+            <input type="number" name="placement" step="1" />
+          </label>
+          <button type="submit">Record Participation</button>
+        </form>
+
+        <h3>Order totals for this event</h3>
+        <table class="standings-table small">
+          <thead><tr><th>Order</th><th>Players</th><th>Points</th></tr></thead>
+          <tbody id="event-totals-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Activity Log</h2></div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

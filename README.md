@@ -68,33 +68,67 @@ else in the sync flow needs to change.
 
 ## API
 
+`🔒` = requires an `x-admin-token` header matching `ADMIN_TOKEN` (see
+[Admin auth](#admin-auth) below).
+
 | Method & path | Description |
 |---|---|
 | `GET /health` | Liveness check |
 | `GET /orders` | List all six Orders |
 | `GET /orders/:slug` | One Order |
 | `GET /orders/totals` | All-time points/player-count totals per Order |
-| `POST /players` | Create/upsert a player `{ email, displayName? }` |
-| `GET /players/:playerId` | Player + Order + progress + achievements |
-| `GET /players/by-email/:email` | Same, looked up by email |
-| `POST /players/:playerId/points` | `{ points }` — increments OrderProgress points |
-| `POST /players/:playerId/achievements` | `{ code, title, eventId? }` — awards an achievement |
-| `POST /events` | Create an event `{ name, leagueAppsEventId?, startDate?, endDate? }` |
+| 🔒 `POST /players` | Create/upsert a player `{ email, displayName? }` |
+| 🔒 `GET /players/:playerId` | Player + Order + progress + achievements |
+| 🔒 `GET /players/by-email/:email` | Same, looked up by email |
+| 🔒 `POST /players/:playerId/points` | `{ points }` — increments OrderProgress points |
+| 🔒 `POST /players/:playerId/achievements` | `{ code, title, eventId? }` — awards an achievement |
+| 🔒 `POST /events` | Create an event `{ name, leagueAppsEventId?, startDate?, endDate? }` |
 | `GET /events` | List events |
-| `GET /events/:eventId` | One event + participation |
+| 🔒 `GET /events/:eventId` | One event + participation roster |
 | `GET /events/:eventId/order-totals` | Per-Order totals for one event |
-| `POST /events/:eventId/participation` | Upsert a player's participation `{ playerId, pointsEarned, placement? }` |
-| `POST /webhooks/leagueapps` | LeagueApps registration webhook |
-| `POST /sync/leagueapps/events/:eventId` | Manual pull-and-sync for one LeagueApps event |
+| 🔒 `POST /events/:eventId/participation` | Upsert a player's participation `{ playerId, pointsEarned, placement? }` |
+| `POST /webhooks/leagueapps` | LeagueApps registration webhook (own HMAC signature check, not the admin token) |
+| 🔒 `POST /sync/leagueapps/events/:eventId` | Manual pull-and-sync for one LeagueApps event |
+
+Routes without 🔒 are aggregate/reference data with no PII, safe to leave
+public (e.g. a standings page). Everything that mutates data, or that
+exposes a player's email (directly, or via their reversible player id),
+is gated.
+
+## GUI
+
+A small static admin console lives at `/` (`public/index.html` +
+`app.js`, served via `express.static` — no separate build step or
+frontend framework). It covers the day-to-day inputs: find/create a
+player, add points, award achievements, create events, and record event
+participation, with a live standings table on top.
+
+Paste the `ADMIN_TOKEN` value into the "Admin token" field in the top
+right and hit Save — it's stored in that browser's `localStorage` and
+sent as `x-admin-token` on every request the GUI makes. An activity log
+at the bottom of the page echoes every API call and its response, which
+doubles as a quick way to see what the GUI is actually doing.
+
+## Admin auth
+
+Routes marked 🔒 above require an `x-admin-token: <ADMIN_TOKEN>` header.
+If `ADMIN_TOKEN` isn't set, the check is skipped — convenient for local
+development, but **the app refuses to start at all when running on
+Heroku** (detected via the `DYNO` env var) if `ADMIN_TOKEN` is unset, so
+this can't accidentally ship open. Set it with:
+
+```bash
+heroku config:set ADMIN_TOKEN="$(openssl rand -hex 24)"
+```
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env   # set DATABASE_URL, LeagueApps vars
+cp .env.example .env   # set DATABASE_URL, ADMIN_TOKEN, LeagueApps vars
 npx prisma migrate deploy   # or `prisma migrate dev` in development
 npm run seed                # seeds the six Orders
-npm run dev                 # starts the API on $PORT (default 3000)
+npm run dev                 # starts the API + GUI on $PORT (default 3000)
 ```
 
 Requires a reachable Postgres instance (`DATABASE_URL` in `.env`).
@@ -107,3 +141,39 @@ npm test
 
 Covers determinism and normalization of Order assignment, and the
 player-ID encode/decode round trip.
+
+## Deploying to Heroku
+
+```bash
+heroku create your-app-name
+heroku addons:create heroku-postgresql:essential-0
+
+# Heroku Postgres terminates TLS with a self-signed cert; sslmode=require
+# tells Prisma to negotiate TLS without validating that cert.
+heroku config:set DATABASE_URL="$(heroku config:get DATABASE_URL)?sslmode=require"
+
+heroku config:set ADMIN_TOKEN="$(openssl rand -hex 24)"
+heroku config:set LEAGUEAPPS_API_BASE="https://api.leagueapps.io"
+heroku config:set LEAGUEAPPS_API_KEY="..."
+heroku config:set LEAGUEAPPS_WEBHOOK_SECRET="..."
+
+git push heroku claude/ods-classification-database-njqfzk:main
+heroku run npm run seed
+```
+
+What that push actually does, all driven by `package.json` and
+`Procfile`:
+
+1. `npm install` runs, which triggers `postinstall` (`prisma generate`).
+   `prisma`, `typescript`, and `ts-node` are regular `dependencies` (not
+   `devDependencies`) specifically so this step doesn't depend on
+   Heroku's `NPM_CONFIG_PRODUCTION` setting.
+2. Heroku's Node buildpack runs `heroku-postbuild`, which runs `npm run
+   build` (`tsc` → `dist/`).
+3. The `release` phase in `Procfile` runs `prisma migrate deploy` against
+   the new `DATABASE_URL` before any web dyno picks up the new release.
+4. The `web` process starts `npm start` → `node dist/index.js`, which
+   reads `$PORT` the way Heroku requires.
+
+`heroku run npm run seed` only needs to be run once per database (it's
+an idempotent upsert of the six Orders, safe to re-run).

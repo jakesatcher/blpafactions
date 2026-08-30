@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { requireAdmin } from "../middleware/adminAuth";
 import { applyRegistration } from "../services/eventSync";
 import { leagueAppsClientFromEnv } from "../services/leagueapps";
 import { verifyWebhookSignature } from "../services/leagueapps";
@@ -59,7 +60,7 @@ leagueAppsRouter.post("/webhooks/leagueapps", async (req, res) => {
  * Manually pulls all registrations for a LeagueApps event and syncs them.
  * Useful for backfills and for environments without a reachable webhook.
  */
-leagueAppsRouter.post("/sync/leagueapps/events/:eventId", async (req, res) => {
+leagueAppsRouter.post("/sync/leagueapps/events/:eventId", requireAdmin, async (req, res) => {
   const client = leagueAppsClientFromEnv();
   const registrations = await client.listRegistrations(req.params.eventId);
   const results = [];
