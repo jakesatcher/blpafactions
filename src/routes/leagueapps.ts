@@ -4,6 +4,7 @@ import { requireAdmin } from "../middleware/adminAuth";
 import { applyRegistration } from "../services/eventSync";
 import { leagueAppsClientFromEnv } from "../services/leagueapps";
 import { verifyWebhookSignature } from "../services/leagueapps";
+import { importMembers } from "../services/memberImport";
 
 export const leagueAppsRouter = Router();
 
@@ -68,4 +69,24 @@ leagueAppsRouter.post("/sync/leagueapps/events/:eventId", requireAdmin, async (r
     results.push(await applyRegistration(reg));
   }
   res.json({ synced: results.length });
+});
+
+const memberImportSchema = z.object({ fromScratch: z.boolean().optional() });
+
+/**
+ * Imports (or incrementally re-syncs) the full LeagueApps member roster
+ * via the Private API's /export/members-2 endpoint — see
+ * src/services/memberImport.ts. Unlike the routes above, this is
+ * verified against real LeagueApps API documentation. Safe to hit
+ * repeatedly (e.g. from an hourly scheduled job, per the docs'
+ * recommended usage) — it resumes from the last run's cursor unless
+ * `fromScratch` is set.
+ */
+leagueAppsRouter.post("/sync/leagueapps/members", requireAdmin, async (req, res) => {
+  const parsed = memberImportSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+  const summary = await importMembers(parsed.data);
+  res.json(summary);
 });

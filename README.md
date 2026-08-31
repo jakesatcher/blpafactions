@@ -49,22 +49,63 @@ they can never drift out of sync with the underlying per-player records.
 
 ## LeagueApps integration
 
-`src/services/leagueapps.ts` holds a thin `LeagueAppsClient` for pulling
-registrations from the LeagueApps API, and an HMAC-SHA256 webhook
-signature verifier. `src/services/eventSync.ts` has the shared,
-idempotent sync logic (`applyRegistration`) used by both:
+Two separate pieces, because LeagueApps itself documents two separate
+auth styles — a "Public API Key" bearer-token style, and a JWT-bearer
+"Private API" used for bulk exports:
 
-- `POST /webhooks/leagueapps` — receives a LeagueApps registration webhook
-  and syncs it (upserts player + Order assignment on first sight, event,
-  and participation). Verifies `x-leagueapps-signature` against
-  `LEAGUEAPPS_WEBHOOK_SECRET` when that env var is set.
-- `POST /sync/leagueapps/events/:eventId` — manual/backfill pull of all
-  registrations for a LeagueApps event.
+### Player roster import (verified against real docs)
 
-`LeagueAppsClient.listRegistrations` is a stub against a plausible
-LeagueApps REST shape — adjust the endpoint path and response mapping to
-match the actual LeagueApps API docs/credentials once available. Nothing
-else in the sync flow needs to change.
+`POST /sync/leagueapps/members` 🔒 imports the full LeagueApps member
+roster via the Private API's `GET /v2/sites/{siteId}/export/members-2`
+(https://leagueapps.notion.site/LeagueApps-API-Documentation) and upserts
+every member as a Player — same `getOrCreatePlayer` path the GUI uses, so
+imported players get the same base64url player id and deterministic
+Order assignment as anyone created any other way.
+
+- **Auth**: OAuth2 with a JWT-bearer assertion (RFC 7523), signed RS256
+  with your org's Private API Key (a downloaded `.p12`, converted to
+  PEM). Not a static API token — see `src/services/leagueappsAuth.ts`,
+  which mirrors LeagueApps' own
+  [sample script](https://github.com/LeagueApps/api-example)'s claim
+  shape (`{ aud, iss, sub, iat, exp }`) exactly. Access tokens last 15
+  minutes and are cached/refreshed automatically.
+- **Pagination**: `members-2` returns up to 1000 rows per call, cursor-paginated
+  by `(last-updated, last-id)`. `src/services/leagueappsPrivateApi.ts`'s
+  `iterateExport()` walks pages until one comes back empty, replicating
+  the sample script's dedup rule for the repeated boundary row.
+- **Incremental by default**: the cursor is persisted in the `SyncCursor`
+  table (`source = "leagueapps-members-2"`) after every page, so a
+  second run only pulls members updated since the first — matching the
+  docs' own recommended usage ("periodically exporting... e.g. hourly
+  syncing to a client system with new data since the last request").
+  Pass `{ "fromScratch": true }` in the request body to re-walk the
+  whole roster (safe — every write is an upsert).
+- **Skipped rows**: `deleted` members, and `CHILD`-type members (who have
+  no email of their own — they're attached to a parent account, and our
+  Order/player-id scheme requires an email) are counted and skipped
+  rather than guessed at. The response body reports these counts.
+
+Set up: generate a Private API Key in the LeagueApps admin dashboard
+(Connect → API Settings), download the `.p12`, convert it —
+`openssl pkcs12 -nodes -legacy -in <client-id>.p12 -out <client-id>.pem`
+— and set `LEAGUEAPPS_SITE_ID`, `LEAGUEAPPS_CLIENT_ID`,
+`LEAGUEAPPS_PRIVATE_KEY` (the PEM contents) per `.env.example`.
+
+### Event registrations (⚠️ unverified)
+
+`src/services/leagueapps.ts` (a different, older `LeagueAppsClient`),
+`src/services/eventSync.ts`'s `applyRegistration`, and two routes:
+
+- `POST /webhooks/leagueapps` — a registration webhook, HMAC-signature
+  checked against `LEAGUEAPPS_WEBHOOK_SECRET` when set.
+- `POST /sync/leagueapps/events/:eventId` 🔒 — manual pull of
+  registrations for one event.
+
+This code predates having real LeagueApps docs and was never checked
+against them — the endpoint path, payload shape, and webhook signature
+scheme are all guesses. Don't rely on it until it's verified the same
+way the member import above was (real docs, or a confirmed sample
+payload).
 
 ## API
 
@@ -87,8 +128,9 @@ else in the sync flow needs to change.
 | 🔒 `GET /events/:eventId` | One event + participation roster |
 | `GET /events/:eventId/order-totals` | Per-Order totals for one event |
 | 🔒 `POST /events/:eventId/participation` | Upsert a player's participation `{ playerId, pointsEarned, placement? }` |
-| `POST /webhooks/leagueapps` | LeagueApps registration webhook (own HMAC signature check, not the admin token) |
-| 🔒 `POST /sync/leagueapps/events/:eventId` | Manual pull-and-sync for one LeagueApps event |
+| `POST /webhooks/leagueapps` | ⚠️ unverified — LeagueApps registration webhook (own HMAC signature check, not the admin token) |
+| 🔒 `POST /sync/leagueapps/events/:eventId` | ⚠️ unverified — manual pull-and-sync for one LeagueApps event |
+| 🔒 `POST /sync/leagueapps/members` | Import/incrementally re-sync the full LeagueApps roster `{ fromScratch? }` |
 
 Routes without 🔒 are aggregate/reference data with no PII, safe to leave
 public (e.g. a standings page). Everything that mutates data, or that
@@ -131,6 +173,9 @@ npm run seed                # seeds the six Orders
 npm run dev                 # starts the API + GUI on $PORT (default 3000)
 ```
 
+The LeagueApps env vars are only required if you're using the LeagueApps
+sync routes — everything else runs fine without them.
+
 Requires a reachable Postgres instance (`DATABASE_URL` in `.env`).
 
 ## Tests
@@ -153,12 +198,24 @@ heroku addons:create heroku-postgresql:essential-0
 heroku config:set DATABASE_URL="$(heroku config:get DATABASE_URL)?sslmode=require"
 
 heroku config:set ADMIN_TOKEN="$(openssl rand -hex 24)"
-heroku config:set LEAGUEAPPS_API_BASE="https://api.leagueapps.io"
-heroku config:set LEAGUEAPPS_API_KEY="..."
-heroku config:set LEAGUEAPPS_WEBHOOK_SECRET="..."
+
+# LeagueApps Private API (member roster import) — omit if not using it yet
+heroku config:set LEAGUEAPPS_API_BASE="https://public.leagueapps.io"
+heroku config:set LEAGUEAPPS_SITE_ID="..."
+heroku config:set LEAGUEAPPS_CLIENT_ID="..."
+heroku config:set LEAGUEAPPS_PRIVATE_KEY="$(cat <client-id>.pem)"
 
 git push heroku claude/ods-classification-database-njqfzk:main
 heroku run npm run seed
+```
+
+To run the member import on a schedule (the docs' recommended usage —
+"typical usage example is hourly syncing"), add the Heroku Scheduler
+add-on and point it at:
+
+```bash
+curl -X POST https://your-app-name.herokuapp.com/sync/leagueapps/members \
+  -H "x-admin-token: $ADMIN_TOKEN"
 ```
 
 What that push actually does, all driven by `package.json` and

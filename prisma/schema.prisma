@@ -135,3 +135,18 @@ model EventParticipation {
   @@index([eventId])
   @@map("event_participation")
 }
+
+/// Resume point for a paginated LeagueApps Private API export (e.g.
+/// "leagueapps-members-2"). The export endpoints are cursor-paginated by
+/// (lastUpdated, id) — see src/services/leagueappsPrivateApi.ts — so a
+/// sync run picks up from here instead of re-scanning the whole roster
+/// every time. BigInt because LeagueApps' lastUpdated is an epoch-ms
+/// timestamp that exceeds Postgres' 32-bit int range.
+model SyncCursor {
+  source      String   @id
+  lastUpdated BigInt   @default(0)
+  lastId      BigInt   @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@map("sync_cursors")
+}

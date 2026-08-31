@@ -1,5 +1,15 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
+/**
+ * NOTE: everything in this file predates
+ * https://leagueapps.notion.site/LeagueApps-API-Documentation and was
+ * never confirmed against it — the docs describe a "Public API Key"
+ * bearer-token style distinct from the JWT-bearer "Private API" used for
+ * exports, so this may still be correct, but it hasn't been checked.
+ * The player-roster import (POST /sync/leagueapps/members) uses the
+ * verified path instead — see src/services/leagueappsPrivateApi.ts and
+ * src/services/memberImport.ts.
+ */
 export interface LeagueAppsRegistration {
   email: string;
   displayName?: string;
