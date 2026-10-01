@@ -7,10 +7,10 @@ import type { RequestHandler } from "express";
  * so a publicly deployed Heroku app can't have points/achievements
  * tampered with, or emails harvested, by anyone who finds the URL.
  *
- * In development (no DYNO, no ADMIN_TOKEN configured) the check is
+ * In development (not deployed, no ADMIN_TOKEN configured) the check is
  * skipped so local curl/testing keeps working without extra setup —
  * see the startup check in src/index.ts that refuses to boot without
- * ADMIN_TOKEN when running on Heroku.
+ * ADMIN_TOKEN when running on Heroku or Railway (src/lib/deployed.ts).
  */
 export const requireAdmin: RequestHandler = (req, res, next) => {
   const token = process.env.ADMIN_TOKEN;

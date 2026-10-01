@@ -215,7 +215,7 @@ doubles as a quick way to see what the GUI is actually doing.
 Routes marked 🔒 above require an `x-admin-token: <ADMIN_TOKEN>` header.
 If `ADMIN_TOKEN` isn't set, the check is skipped — convenient for local
 development, but **the app refuses to start at all when running on
-Heroku** (detected via the `DYNO` env var) if `ADMIN_TOKEN` is unset, so
+Heroku or Railway** (detected via `DYNO` / `RAILWAY_ENVIRONMENT_ID`) if `ADMIN_TOKEN` is unset, so
 this can't accidentally ship open. Set it with:
 
 ```bash
@@ -245,6 +245,37 @@ npm test
 
 Covers determinism and normalization of Order assignment, and the
 player-ID encode/decode round trip.
+
+## Deploying to Railway
+
+The easiest path runs this app next to BLST in one Railway project. From the
+BLST repo, `scripts/railway-setup.sh` creates Postgres plus a `factions` and a
+`blst` service and wires them together; see BLST's
+[docs/RAILWAY.md](https://github.com/jakesatcher/BLST/blob/claude/great-bardeen-wfd39q/docs/RAILWAY.md).
+
+To deploy this app on its own: **New Project → Deploy PostgreSQL**, then
+**+ Create → GitHub Repo → jakesatcher/blpafactions**, with these variables:
+
+```
+ADMIN_TOKEN=<openssl rand -hex 24>
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+PORT=8080
+```
+
+Then generate a domain under Settings → Networking (port 8080).
+
+You don't need to configure build or start commands: `railpack.json` tells
+Railway's builder to start with
+`npx prisma migrate deploy && npm run seed && npm start`. That migrates,
+upserts the six Orders (idempotent), and starts. It also installs `openssl`,
+which Prisma needs.
+
+Like on Heroku, the app refuses to boot on Railway without `ADMIN_TOKEN`.
+Railway is detected through `RAILWAY_ENVIRONMENT_ID`; see
+`src/lib/deployed.ts`.
+
+When sharing a database with BLST, add `?schema=factions` to `DATABASE_URL`
+so this app's tables live in their own schema.
 
 ## Deploying to Heroku
 

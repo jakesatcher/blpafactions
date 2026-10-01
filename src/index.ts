@@ -9,15 +9,21 @@ import { ordersRouter } from "./routes/orders";
 import { eventsRouter } from "./routes/events";
 import { leagueAppsRouter } from "./routes/leagueapps";
 import { errorHandler } from "./middleware/errorHandler";
+import { deployedPlatform } from "./lib/deployed";
 
-// DYNO is set by every Heroku dyno; use it as the "are we deployed"
-// signal rather than NODE_ENV, since nothing here sets NODE_ENV=production
-// explicitly. Refuse to boot without an admin token once actually
-// deployed — the GUI's write routes and player-email lookups depend on
-// it, and it's cheap to catch this at startup instead of finding out via
-// a wide-open console in production.
-if (process.env.DYNO && !process.env.ADMIN_TOKEN) {
-  throw new Error("ADMIN_TOKEN must be set before deploying (heroku config:set ADMIN_TOKEN=...)");
+// DYNO (Heroku) / RAILWAY_ENVIRONMENT_ID (Railway) are the "are we
+// deployed" signals rather than NODE_ENV, since nothing here sets
+// NODE_ENV=production explicitly. Refuse to boot without an admin token
+// once actually deployed — the GUI's write routes and player-email lookups
+// depend on it, and it's cheap to catch this at startup instead of finding
+// out via a wide-open console in production.
+const platform = deployedPlatform();
+if (platform && !process.env.ADMIN_TOKEN) {
+  throw new Error(
+    platform === "railway"
+      ? "ADMIN_TOKEN must be set before deploying (railway variable set ADMIN_TOKEN=...)"
+      : "ADMIN_TOKEN must be set before deploying (heroku config:set ADMIN_TOKEN=...)",
+  );
 }
 
 const app = express();
