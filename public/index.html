@@ -90,6 +90,31 @@
       </div>
     </section>
 
+    <section class="card" id="bulk-upload-card">
+      <div class="card-header"><h2>Bulk Upload Players</h2></div>
+      <p class="hint">
+        CSV, semicolon- or tab-separated. Needs an <code>email</code> column;
+        a <code>displayName</code>/<code>name</code> column is optional.
+        A player whose email already exists keeps their current Order —
+        a re-upload never duplicates or reassigns anyone.
+      </p>
+      <form id="bulk-upload-form" class="stacked-form">
+        <input type="file" name="file" accept=".csv,.tsv,text/csv" required />
+        <div class="button-row">
+          <button type="submit" data-action="preview">Preview</button>
+          <button type="submit" data-action="import">Import</button>
+        </div>
+      </form>
+      <div id="bulk-upload-result" hidden>
+        <p id="bulk-upload-summary"></p>
+        <table class="standings-table small">
+          <thead><tr><th>Line</th><th>Email</th><th>Status</th><th>Order</th></tr></thead>
+          <tbody id="bulk-upload-rows"></tbody>
+        </table>
+        <p id="bulk-upload-errors"></p>
+      </div>
+    </section>
+
     <section class="grid-2">
       <div class="card">
         <div class="card-header"><h2>Events</h2></div>

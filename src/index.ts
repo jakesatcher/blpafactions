@@ -26,8 +26,10 @@ app.use(helmet());
 app.use(cors());
 
 // The LeagueApps webhook needs the raw body for signature verification,
-// so that one path gets express.raw() ahead of the global express.json().
+// and the bulk player upload posts a raw CSV, not JSON — both get a
+// path-scoped body parser ahead of the global express.json().
 app.use("/webhooks/leagueapps", express.raw({ type: "*/*" }));
+app.use("/players/bulk-upload", express.text({ type: "text/csv", limit: "2mb" }));
 app.use(express.json());
 
 app.use(express.static(path.join(__dirname, "..", "public")));

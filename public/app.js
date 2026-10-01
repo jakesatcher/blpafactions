@@ -240,6 +240,67 @@ document.getElementById("participation-form").addEventListener("submit", async (
   }
 });
 
+// ---------- Bulk upload ----------
+
+async function postCsv(path, csvText) {
+  const headers = { "Content-Type": "text/csv" };
+  const token = getToken();
+  if (token) headers["x-admin-token"] = token;
+
+  const res = await fetch(path, { method: "POST", headers, body: csvText });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!res.ok) {
+    const message = data && data.error ? JSON.stringify(data.error) : res.statusText;
+    log(`POST ${path} → ${res.status}: ${message}`, "error");
+    throw new Error(message);
+  }
+  log(`POST ${path} → ${res.status}`);
+  return data;
+}
+
+function renderBulkUploadSummary(summary) {
+  document.getElementById("bulk-upload-result").hidden = false;
+
+  const mode = summary.dryRun ? "Preview (nothing saved)" : "Imported";
+  document.getElementById("bulk-upload-summary").textContent =
+    `${mode}: ${summary.newlyAssigned} newly assigned, ${summary.alreadyAssigned} already assigned, ` +
+    `${summary.invalid} invalid row(s), out of ${summary.totalDataRows} data row(s).`;
+
+  const body = document.getElementById("bulk-upload-rows");
+  body.innerHTML = "";
+  for (const row of summary.rows) {
+    const tr = document.createElement("tr");
+    const statusLabel = row.status === "newlyAssigned" ? "newly assigned" : "already assigned";
+    const dup = row.duplicateWithinFile ? " (dup in file)" : "";
+    tr.innerHTML = `<td>${row.line}</td><td>${row.email}</td><td>${statusLabel}${dup}</td><td>${row.orderSlug}</td>`;
+    body.appendChild(tr);
+  }
+
+  const errorsEl = document.getElementById("bulk-upload-errors");
+  errorsEl.textContent = summary.parseErrors.length
+    ? "Skipped: " + summary.parseErrors.map((e) => `line ${e.line}: ${e.message}`).join("; ")
+    : "";
+}
+
+document.getElementById("bulk-upload-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const dryRun = (event.submitter?.dataset.action || "preview") === "preview";
+  const fileInput = event.target.file;
+  const file = fileInput.files[0];
+  if (!file) return log("Choose a CSV file first.", "error");
+
+  try {
+    const text = await file.text();
+    const summary = await postCsv(`/players/bulk-upload?dryRun=${dryRun}`, text);
+    renderBulkUploadSummary(summary);
+    if (!dryRun) loadStandings().catch(() => {});
+  } catch {
+    // already logged
+  }
+});
+
 // ---------- Admin token ----------
 
 document.getElementById("save-token").addEventListener("click", () => {

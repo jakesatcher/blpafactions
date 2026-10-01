@@ -129,6 +129,41 @@ scheme are all guesses. Don't rely on it until it's verified the same
 way the member import above was (real docs, or a confirmed sample
 payload).
 
+## BLST integration
+
+[BLST](https://github.com/jakesatcher/BLST) (BLPA Live Scoring & Stats)
+is a separate app that pushes into this one — Factions doesn't call out
+to BLST at all, so there's nothing to build or configure here. BLST's
+`src/services/factions.js` registers each rostered player via
+`POST /players {email, displayName}` (the exact endpoint this README
+documents above), then pushes tournament results through
+`POST /events/:eventId/participation` and achievements through
+`POST /players/:playerId/achievements` — both idempotent upserts, and it
+deliberately never calls `POST /players/:id/points` (which increments,
+so a retried push would double-count). Because player registration goes
+through the same `getOrCreatePlayer` path as everything else, a BLST
+tournament re-sync carries the same guarantee described above: it can't
+duplicate a player or move them to a different Order.
+
+## Bulk player upload (manual)
+
+🔒 `POST /players/bulk-upload` takes a CSV/TSV/semicolon-separated body
+(`Content-Type: text/csv`) with an `email` column and an optional
+`displayName`/`name` column — header matching is case- and
+punctuation-insensitive. `?dryRun=true` previews the whole file (what
+would be newly assigned vs. already exists, and which rows are invalid)
+without writing anything, the same workflow BLST's own roster CSV
+upload uses. Every row goes through `getOrCreatePlayer`, so re-uploading
+a file (accidentally twice, or as a refreshed export) never duplicates
+or reassigns anyone — it's also safe within one file: a repeated email
+in the same upload only gets assigned once (`duplicateWithinFile: true`
+on the later row). Parsing errors (missing/invalid email) are reported
+per line rather than aborting the batch, matching BLST's own CSV
+import's "flag problems with line numbers" behavior.
+
+The GUI's "Bulk Upload Players" card wraps this with a file picker and
+Preview/Import buttons.
+
 ## API
 
 `🔒` = requires an `x-admin-token` header matching `ADMIN_TOKEN` (see
@@ -141,6 +176,7 @@ payload).
 | `GET /orders/:slug` | One Order |
 | `GET /orders/totals` | All-time points/player-count totals per Order |
 | 🔒 `POST /players` | Create/find a player `{ email, displayName? }` — 201 if newly assigned, 200 if the email was already a player (`alreadyAssigned: true`) |
+| 🔒 `POST /players/bulk-upload` | CSV body (`Content-Type: text/csv`), `?dryRun=true` to preview → `{ newlyAssigned, alreadyAssigned, invalid, rows, parseErrors }` |
 | 🔒 `GET /players/:playerId` | Player + Order + progress + achievements |
 | 🔒 `GET /players/by-email/:email` | Same, looked up by email |
 | 🔒 `POST /players/:playerId/points` | `{ points }` — increments OrderProgress points |
@@ -164,8 +200,9 @@ is gated.
 A small static admin console lives at `/` (`public/index.html` +
 `app.js`, served via `express.static` — no separate build step or
 frontend framework). It covers the day-to-day inputs: find/create a
-player, add points, award achievements, create events, and record event
-participation, with a live standings table on top.
+player, bulk-upload a CSV of players, add points, award achievements,
+create events, and record event participation, with a live standings
+table on top.
 
 Paste the `ADMIN_TOKEN` value into the "Admin token" field in the top
 right and hit Save — it's stored in that browser's `localStorage` and

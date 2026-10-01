@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { emailToPlayerId } from "../lib/playerId";
 import { requireAdmin } from "../middleware/adminAuth";
 import { addPoints, getOrCreatePlayer, recordAchievement } from "../services/playerService";
+import { bulkImportPlayersFromCsv } from "../services/bulkPlayerImport";
 
 export const playersRouter = Router();
 
@@ -24,6 +25,21 @@ playersRouter.post("/players", requireAdmin, async (req, res) => {
   }
   const { player, created } = await getOrCreatePlayer(parsed.data);
   res.status(created ? 201 : 200).json({ ...player, alreadyAssigned: !created });
+});
+
+/**
+ * Bulk player import from a CSV body (Content-Type: text/csv — see the
+ * path-scoped express.text() in src/index.ts). `?dryRun=true` previews
+ * without writing anything. Same duplicate/reassignment guarantee as
+ * every other player-creation path — see src/services/playerService.ts.
+ */
+playersRouter.post("/players/bulk-upload", requireAdmin, async (req, res) => {
+  if (typeof req.body !== "string") {
+    return res.status(400).json({ error: "expected a text/csv body" });
+  }
+  const dryRun = req.query.dryRun === "true";
+  const summary = await bulkImportPlayersFromCsv(req.body, { dryRun });
+  res.status(dryRun ? 200 : 201).json(summary);
 });
 
 playersRouter.get("/players/:playerId", requireAdmin, async (req, res) => {
