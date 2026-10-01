@@ -22,8 +22,8 @@ playersRouter.post("/players", requireAdmin, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  const player = await getOrCreatePlayer(parsed.data);
-  res.status(201).json(player);
+  const { player, created } = await getOrCreatePlayer(parsed.data);
+  res.status(created ? 201 : 200).json({ ...player, alreadyAssigned: !created });
 });
 
 playersRouter.get("/players/:playerId", requireAdmin, async (req, res) => {

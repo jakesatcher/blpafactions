@@ -9,7 +9,7 @@ import type { LeagueAppsRegistration } from "./leagueapps";
  * registration from a webhook retry or a manual re-sync.
  */
 export async function applyRegistration(reg: LeagueAppsRegistration) {
-  const player = await getOrCreatePlayer({
+  const { player, created } = await getOrCreatePlayer({
     email: reg.email,
     displayName: reg.displayName,
     leagueAppsUserId: reg.userId,
@@ -32,5 +32,5 @@ export async function applyRegistration(reg: LeagueAppsRegistration) {
     },
   });
 
-  return { player, event, participation };
+  return { player, playerCreated: created, event, participation };
 }

@@ -30,6 +30,24 @@ round trip, when reconciling data pulled from LeagueApps or other event
 sources. Player IDs should be handled with the same care as email
 addresses.
 
+**Once assigned, always that Order.** Every path that can create a
+player — the GUI, the LeagueApps member import, the registration
+webhook/sync, a future bulk upload — funnels through one function,
+`getOrCreatePlayer()` (`src/services/playerService.ts`). If a player
+already exists for an email, that function's update path has no
+`orderSlug` field in it at all, so there is no code path, on any input,
+that can move an existing player to a different Order — re-running an
+import, uploading the same roster twice, or a player showing up again
+through a different source all just confirm the existing assignment
+rather than touching it. The function reports `created: true`/`false` so
+callers can tell "newly assigned" from "already was" instead of that
+distinction being silent; `POST /sync/leagueapps/members`'s response
+breaks this out as `newlyAssigned` / `alreadyAssigned` counts.
+`test/playerAssignmentLock.test.ts` verifies this against a real
+database, including a case where the assignment algorithm's answer
+changes between two calls for the same email — the second call still
+can't move the player.
+
 ## Data model
 
 See `prisma/schema.prisma` for the full definitions.
@@ -83,7 +101,11 @@ Order assignment as anyone created any other way.
 - **Skipped rows**: `deleted` members, and `CHILD`-type members (who have
   no email of their own — they're attached to a parent account, and our
   Order/player-id scheme requires an email) are counted and skipped
-  rather than guessed at. The response body reports these counts.
+  rather than guessed at. The response reports `newlyAssigned` (brand-new
+  players) separately from `alreadyAssigned` (members who already had a
+  player — their existing Order was left alone) alongside those skip
+  counts, so a re-run's output makes the "didn't duplicate or reassign"
+  check visible rather than just a trust-me.
 
 Set up: generate a Private API Key in the LeagueApps admin dashboard
 (Connect → API Settings), download the `.p12`, convert it —
@@ -118,7 +140,7 @@ payload).
 | `GET /orders` | List all six Orders |
 | `GET /orders/:slug` | One Order |
 | `GET /orders/totals` | All-time points/player-count totals per Order |
-| 🔒 `POST /players` | Create/upsert a player `{ email, displayName? }` |
+| 🔒 `POST /players` | Create/find a player `{ email, displayName? }` — 201 if newly assigned, 200 if the email was already a player (`alreadyAssigned: true`) |
 | 🔒 `GET /players/:playerId` | Player + Order + progress + achievements |
 | 🔒 `GET /players/by-email/:email` | Same, looked up by email |
 | 🔒 `POST /players/:playerId/points` | `{ points }` — increments OrderProgress points |
@@ -130,7 +152,7 @@ payload).
 | 🔒 `POST /events/:eventId/participation` | Upsert a player's participation `{ playerId, pointsEarned, placement? }` |
 | `POST /webhooks/leagueapps` | ⚠️ unverified — LeagueApps registration webhook (own HMAC signature check, not the admin token) |
 | 🔒 `POST /sync/leagueapps/events/:eventId` | ⚠️ unverified — manual pull-and-sync for one LeagueApps event |
-| 🔒 `POST /sync/leagueapps/members` | Import/incrementally re-sync the full LeagueApps roster `{ fromScratch? }` |
+| 🔒 `POST /sync/leagueapps/members` | Import/incrementally re-sync the full LeagueApps roster `{ fromScratch? }` → `{ newlyAssigned, alreadyAssigned, skippedDeleted, skippedNoEmail, ... }` |
 
 Routes without 🔒 are aggregate/reference data with no PII, safe to leave
 public (e.g. a standings page). Everything that mutates data, or that
