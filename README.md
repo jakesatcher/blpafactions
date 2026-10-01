@@ -7,7 +7,10 @@
 >   database, one sign-in.
 > - **Same results:** Order assignment and member ids use the exact same
 >   formula, so nobody changes Order.
-> - **Where it is:** the public **Factions** page, and **Admin → Factions**.
+> - **Where it is:** an optional feature each organization turns on (and
+>   designs its own factions) at `<org>.beerleaguestats.hockey/factions`;
+>   BLPA keeps its six Orders. Admins use **Admin → Organization** and
+>   **Admin → Factions**.
 > - **Deploy:** run `npm run railway`, from this repo or BLST. It deploys BLST
 >   with Factions included; see [docs/RAILWAY.md](docs/RAILWAY.md).
 > - **Existing data:** BLST imports it automatically from the earlier
