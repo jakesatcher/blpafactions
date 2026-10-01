@@ -22,7 +22,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
     "postinstall": "prisma generate",
-    "heroku-postbuild": "npm run build"
+    "heroku-postbuild": "npm run build",
+    "railway": "bash scripts/railway-setup.sh"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",

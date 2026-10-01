@@ -248,34 +248,13 @@ player-ID encode/decode round trip.
 
 ## Deploying to Railway
 
-The easiest path runs this app next to BLST in one Railway project. From the
-BLST repo, `scripts/railway-setup.sh` creates Postgres plus a `factions` and a
-`blst` service and wires them together; see BLST's
-[docs/RAILWAY.md](https://github.com/jakesatcher/BLST/blob/claude/great-bardeen-wfd39q/docs/RAILWAY.md).
+This app and BLST deploy together into one Railway project with one command (from this repo or the BLST repo):
 
-To deploy this app on its own: **New Project → Deploy PostgreSQL**, then
-**+ Create → GitHub Repo → jakesatcher/blpafactions**, with these variables:
-
-```
-ADMIN_TOKEN=<openssl rand -hex 24>
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-PORT=8080
+```bash
+npm run railway
 ```
 
-Then generate a domain under Settings → Networking (port 8080).
-
-You don't need to configure build or start commands: `railpack.json` tells
-Railway's builder to start with
-`npx prisma migrate deploy && npm run seed && npm start`. That migrates,
-upserts the six Orders (idempotent), and starts. It also installs `openssl`,
-which Prisma needs.
-
-Like on Heroku, the app refuses to boot on Railway without `ADMIN_TOKEN`.
-Railway is detected through `RAILWAY_ENVIRONMENT_ID`; see
-`src/lib/deployed.ts`.
-
-When sharing a database with BLST, add `?schema=factions` to `DATABASE_URL`
-so this app's tables live in their own schema.
+Let Railway's GitHub app read both repos first. **[docs/RAILWAY.md](docs/RAILWAY.md)** has the details, including how to set it up in the Railway dashboard instead.
 
 ## Deploying to Heroku
 
