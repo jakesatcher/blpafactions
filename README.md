@@ -1,5 +1,21 @@
 # BLPA — Original Draft Society (ODS)
 
+> **BLPA Factions now lives inside BLST.**
+> - **What moved:** everything here (Orders for life, members, points,
+>   achievements, events, bulk upload and the LeagueApps member import) is
+>   built into [BLST](https://github.com/jakesatcher/BLST): one app, one
+>   database, one sign-in.
+> - **Same results:** Order assignment and member ids use the exact same
+>   formula, so nobody changes Order.
+> - **Where it is:** the public **Factions** page, and **Admin → Factions**.
+> - **Deploy:** run `npm run railway`, from this repo or BLST. It deploys BLST
+>   with Factions included; see [docs/RAILWAY.md](docs/RAILWAY.md).
+> - **Existing data:** BLST imports it automatically from the earlier
+>   side-by-side Railway setup, or with `npm run factions:import` (see BLST's
+>   [docs/FACTIONS.md](https://github.com/jakesatcher/BLST/blob/claude/great-bardeen-wfd39q/docs/FACTIONS.md)).
+>
+> This standalone app still works, but new features go into BLST.
+
 Database and API for the ODS classification system: every BLPA player is
 deterministically assigned to one of six Orders and tracked across events.
 
@@ -248,13 +264,14 @@ player-ID encode/decode round trip.
 
 ## Deploying to Railway
 
-This app and BLST deploy together into one Railway project with one command (from this repo or the BLST repo):
+`npm run railway` (same script as in BLST) deploys **BLST with Factions built in**: one service plus Postgres. See [docs/RAILWAY.md](docs/RAILWAY.md).
 
-```bash
-npm run railway
-```
+To run this standalone app on Railway anyway:
+1. **New Project → Deploy PostgreSQL**, then **+ Create → GitHub Repo → jakesatcher/blpafactions**.
+2. Set `ADMIN_TOKEN`, `DATABASE_URL=${{Postgres.DATABASE_URL}}` and `PORT=8080`.
+3. Generate a domain.
 
-Let Railway's GitHub app read both repos first. **[docs/RAILWAY.md](docs/RAILWAY.md)** has the details, including how to set it up in the Railway dashboard instead.
+`railpack.json` handles migrations, the Orders seed and the start command.
 
 ## Deploying to Heroku
 
